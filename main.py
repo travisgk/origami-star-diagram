@@ -249,6 +249,8 @@ def _draw_fundamental_lines(
                 ),
                 v_left_color,
             ),
+            (_calc_line(w, h, start=inner_p[1], end=p[4], cap_start=True), h_right_color),
+            (_calc_line(w, h, start=inner_p[0], end=p[2], cap_start=True), h_right_color),
 
             # right side.
             (_calc_line(w, h, start=p[0], end=p[1], cap_start=False), h_right_color),
@@ -263,6 +265,8 @@ def _draw_fundamental_lines(
                 ),
                 v_right_color,
             ),
+            (_calc_line(w, h, start=inner_p[4], end=p[1], cap_start=True), h_left_color),
+            (_calc_line(w, h, start=inner_p[0], end=p[3], cap_start=True), h_left_color),
         ]
 
         for line, color in lines:
@@ -407,6 +411,8 @@ def create_star_diagram(
     _draw_circle(main_draw, center=BR, radius=100, fill_color=_BR_COLOR)
 
 
+    FADE_FACTOR = 0.65
+
     def draw_fold_diagram(point, start, end, color):
         RADIUS = 30
         point, edge_a, edge_b = reflect_point(point, start, end, w, h) # TR, t[0], t[1]
@@ -431,15 +437,14 @@ def create_star_diagram(
             point[0] + np.cos(angle_b) * help_length * (1 - ratio),
             point[1] + np.sin(angle_b) * help_length * (1 - ratio),
         )
-        factor = 0.65
         first_hints_draw.line(
             (point[0], point[1], help_a[0], help_a[1]),
-            fill=interpolate_color(color, (255, 255, 255), factor=factor),
+            fill=interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR),
             width=help_line_width,
         )
         first_hints_draw.line(
             (point[0], point[1], help_b[0], help_b[1]),
-            fill=interpolate_color(color, (255, 255, 255), factor=factor),
+            fill=interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR),
             width=help_line_width,
         )
 
@@ -454,7 +459,32 @@ def create_star_diagram(
     draw_fold_diagram(BL, b[0], b[3], _BL_COLOR)
     draw_fold_diagram(BR, b[0], b[2], _BR_COLOR)
 
+    draw_fold_diagram(TR, t[2], t[4], _TR_COLOR)
+    draw_fold_diagram(TL, t[1], t[3], _TL_COLOR)
+    draw_fold_diagram(BL, b[1], b[3], _BL_COLOR)
+    draw_fold_diagram(BR, b[2], b[4], _BR_COLOR)
 
+    start_color = interpolate_color(_TL_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    end_color = interpolate_color(_TR_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    midway = interpolate_color(start_color, end_color)
+    start = (0, t[4][1] * 2)
+    end = (help_length/2, start[1])
+    _draw_gradient_line(first_hints_draw, start, end, start_color, midway, help_line_width)
+
+    start = (w - help_length/2, t[1][1] * 2)
+    end = (w, start[1])
+    _draw_gradient_line(first_hints_draw, start, end, midway, end_color, help_line_width)
+
+    start_color = interpolate_color(_BL_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    end_color = interpolate_color(_BR_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    midway = interpolate_color(start_color, end_color)
+    start = (0, h - t[4][1]*2)
+    end = (help_length/2, start[1])
+    _draw_gradient_line(first_hints_draw, start, end, start_color, midway, help_line_width)
+
+    start = (w - help_length/2, h - t[1][1]*2)
+    end = (w, start[1])
+    _draw_gradient_line(first_hints_draw, start, end, midway, end_color, help_line_width)
 
     """
     Step 5) Pastes the transparent onto a solid white background 
@@ -527,10 +557,12 @@ def _png_to_pdf(images: list, pdf_path, page_size, landscape: bool=False):
 def main():
     page_size = reportlab.lib.pagesizes.letter
 
+    margin = 1/2
+
     star_diagram = create_star_diagram(
         print_width=11,
-        print_height=8.5 * 2,
-        poly_height=8,
+        print_height=8.5*2 - margin*2,
+        poly_height=7.9,
         print_margin_left=0,
         print_margin_right=0,
         print_margin_top=0,
@@ -539,7 +571,26 @@ def main():
 
     star_diagram.save("stars.png")
 
-    _png_to_pdf([star_diagram.crop((0, 0, 11 * DPI, 8.5 * DPI)), star_diagram.crop((0, 8.5 * DPI, 11 * DPI, 17 * DPI))], "star.pdf", page_size, landscape=True) 
+    images = []
+
+    # first half.
+    crop = star_diagram.crop((0, 0, 11 * DPI, (8.5 - margin) * DPI))
+    
+    # creates a new blank image with a white background.
+    new_image = Image.new("RGB", (round(11 * DPI), round(8.5 * DPI)), (255, 255, 255))
+    new_image.paste(crop, (0, 0))
+    images.append(new_image)
+
+    # second half.
+    crop = star_diagram.crop((0, (8.5 - margin) * DPI, 11 * DPI, (8.5 - margin) * 2 * DPI))
+
+    # creates a new blank image with a white background.
+    new_image = Image.new("RGB", (round(11 * DPI), round(8.5 * DPI)), (255, 255, 255))
+    new_image.paste(crop, (0, round(margin * DPI)))
+    images.append(new_image)
+
+
+    _png_to_pdf(images, "star.pdf", page_size, landscape=True) 
 
 
 if __name__ == "__main__":
