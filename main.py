@@ -7,6 +7,20 @@ from reportlab.pdfgen import canvas
 
 DPI = 300
 
+_MAIN_LINE_COLOR = (0, 0, 0)
+_HORIZ_LINE_COLOR = (128, 128, 128)
+_BEAM_LINE_COLOR = (223, 223, 223)
+_TR_COLOR = (100, 60, 200)
+_TL_COLOR = (200, 60, 100)
+_BL_COLOR = (100, 200, 60)
+_BR_COLOR = (200, 170, 30)
+CORNER_DOT_RADIUS_IN = 1/2
+FOLD_DOT_RADIUS_IN = 1/8
+MAIN_LINE_WIDTH_IN = 3/64
+HINT_LINE_WIDTH_IN = 1/32
+BEAM_LINE_WIDTH_IN = 1/32
+
+
 def _regularize_radians(radians):
     STEP = 2 * np.pi
 
@@ -160,23 +174,10 @@ def reflect_point(p, a, b, image_width, image_height):
     """
     w, h = image_width, image_height
 
-    """ Step 1) The edges of the paper where fold will begin are found. """
     # strips extra info.
-    p = p[:2]
-    a = a[:2]
-    b = b[:2]
-
-    angle = np.arctan2(b[1] - a[1], b[0] - a[0]) #  start to end.
-    flipped = _regularize_radians(angle + np.pi)
-    hits = [
-        find_edge_intersection(a, angle, max_x=w, max_y=h),
-        find_edge_intersection(a, flipped, max_x=w, max_y=h),
-    ]
-
-    """ Step 2) The reflection is found. """
-    p = np.array(p)
-    a = np.array(a)
-    b = np.array(b)
+    p = np.array(p[:2])
+    a = np.array(a[:2])
+    b = np.array(b[:2])
 
     ab = b - a # from <a> to <b>.    
     ap = p - a # from <a> to <p>.
@@ -189,7 +190,7 @@ def reflect_point(p, a, b, image_width, image_height):
     # reflects point <p> across the line.
     reflection = tuple(2 * projection - p)
 
-    return (reflection, hits[0], hits[1])
+    return reflection
 
 
 def _draw_gradient_line(draw, start, end, start_color, end_color, line_width):
@@ -210,11 +211,6 @@ def _draw_gradient_line(draw, start, end, start_color, end_color, line_width):
 
 
 
-_MAIN_LINE_COLOR = (0, 0, 0)
-_TR_COLOR = (100, 60, 200)
-_TL_COLOR = (200, 60, 100)
-_BL_COLOR = (100, 200, 60)
-_BR_COLOR = (200, 170, 30)
 
 def _draw_fundamental_lines(
     draw,
@@ -230,6 +226,23 @@ def _draw_fundamental_lines(
     it, ib = inner_top_points, inner_bottom_points
     w, h = image_width, image_height
     
+    # horizontal lines on both sides.
+    horiz_lines = [
+        (((0, t[4][1]), it[2]), _HORIZ_LINE_COLOR),
+        ((it[3], (w, t[1][1])), _HORIZ_LINE_COLOR),
+        (((0, b[4][1]), ib[2]), _HORIZ_LINE_COLOR),
+        ((ib[3], (w, b[1][1])), _HORIZ_LINE_COLOR),
+    ]
+
+    for line, color in horiz_lines:
+        start, end = line
+        draw.line(
+            (start[0], start[1], end[0], end[1]),
+            fill=color,
+            width=line_width,
+        )
+
+
     def draw_lines(
         p, inner_p, other_inner_p, h_left_color, v_left_color, h_right_color, v_right_color
     ):
@@ -251,6 +264,7 @@ def _draw_fundamental_lines(
             ),
             (_calc_line(w, h, start=inner_p[1], end=p[4], cap_start=True), h_right_color),
             (_calc_line(w, h, start=inner_p[0], end=p[2], cap_start=True), h_right_color),
+            
 
             # right side.
             (_calc_line(w, h, start=p[0], end=p[1], cap_start=False), h_right_color),
@@ -267,6 +281,7 @@ def _draw_fundamental_lines(
             ),
             (_calc_line(w, h, start=inner_p[4], end=p[1], cap_start=True), h_left_color),
             (_calc_line(w, h, start=inner_p[0], end=p[3], cap_start=True), h_left_color),
+            
         ]
 
         for line, color in lines:
@@ -277,9 +292,9 @@ def _draw_fundamental_lines(
                 width=line_width,
             )
 
-        midway_color = interpolate_color(h_left_color, h_right_color)
-        _draw_gradient_line(draw, (0, p[4][1]), inner_p[2], h_left_color, midway_color, line_width=line_width)
-        _draw_gradient_line(draw, inner_p[3], (w, p[1][1]), midway_color, h_right_color, line_width=line_width)
+        #midway_color = interpolate_color(h_left_color, h_right_color)
+        #_draw_gradient_line(draw, (0, p[4][1]), inner_p[2], h_left_color, midway_color, line_width=line_width)
+        #_draw_gradient_line(draw, inner_p[3], (w, p[1][1]), midway_color, h_right_color, line_width=line_width)
 
     draw_lines(t, it, ib, _TL_COLOR, _BL_COLOR, _TR_COLOR, _BR_COLOR)
     draw_lines(b, ib, it, _BL_COLOR, _TL_COLOR, _BR_COLOR, _TR_COLOR)
@@ -289,11 +304,47 @@ def _draw_secondary_lines(
     draw,
     top_points,
     bottom_points,
+    inner_top_points,
+    inner_bottom_points,
     image_width,
     image_height,
     line_width,
 ):
     t, b = top_points, bottom_points
+    it, ib = inner_top_points, inner_bottom_points
+
+    def midpoint_of(a, b):
+        return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+
+    def draw_lines(p, inner_p):
+        w, h = image_width, image_height
+        lines = [
+            # left side.
+            _calc_line(w, h, start=inner_p[2], end=midpoint_of(p[0], p[4]), cap_start=True),
+            _calc_line(w, h, start=inner_p[1], end=midpoint_of(p[3], p[4]), cap_start=True),
+
+            # right side.
+            _calc_line(w, h, start=inner_p[3], end=midpoint_of(p[0], p[1]), cap_start=True),
+            _calc_line(w, h, start=inner_p[4], end=midpoint_of(p[1], p[2]), cap_start=True),
+        ]
+
+        for start, end in lines:
+            draw.line(
+                (start[0], start[1], end[0], end[1]),
+                fill=_BEAM_LINE_COLOR,
+                width=line_width,
+            )
+
+    draw_lines(t, it)
+    draw_lines(b, ib)
+    start = inner_top_points[0]
+    end = inner_bottom_points[0]
+    draw.line(
+        (start[0], start[1], end[0], end[1]),
+        fill=_BEAM_LINE_COLOR,
+        width=line_width,
+    )
+
 
 
 def create_star_diagram(
@@ -319,8 +370,7 @@ def create_star_diagram(
         DPI (num): the print resolution (pixels-per-inch).
     """
 
-    MAIN_LINE_WIDTH_IN = 1 / 16
-    HINT_LINE_WIDTH_IN = 1 / 32
+    
 
     """
     Step 1) Initializes print and diagram settings.
@@ -348,6 +398,7 @@ def create_star_diagram(
     help_length = help_length_in * DPI
     line_width = max(1, round(MAIN_LINE_WIDTH_IN * DPI))
     help_line_width = max(1, round(HINT_LINE_WIDTH_IN * DPI))
+    beam_line_width = max(1, round(BEAM_LINE_WIDTH_IN * DPI))
 
     """
     Step 2) Calculates the polygon points.
@@ -389,6 +440,30 @@ def create_star_diagram(
         width=line_width,
     )
 
+    FADE_FACTOR = 0.65
+
+    start_color = interpolate_color(_TL_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    end_color = interpolate_color(_TR_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    midway = interpolate_color(start_color, end_color)
+    start = (0, t[4][1] * 2)
+    end = (help_length/2, start[1])
+    _draw_gradient_line(main_draw, start, end, start_color, midway, help_line_width)
+
+    start = (w - help_length/2, t[1][1] * 2)
+    end = (w, start[1])
+    _draw_gradient_line(main_draw, start, end, midway, end_color, help_line_width)
+
+    start_color = interpolate_color(_BL_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    end_color = interpolate_color(_BR_COLOR, (255, 255, 255), factor=FADE_FACTOR)
+    midway = interpolate_color(start_color, end_color)
+    start = (0, h - t[4][1]*2)
+    end = (help_length/2, start[1])
+    _draw_gradient_line(main_draw, start, end, start_color, midway, help_line_width)
+
+    start = (w - help_length/2, h - t[1][1]*2)
+    end = (w, start[1])
+    _draw_gradient_line(main_draw, start, end, midway, end_color, help_line_width)
+
     _draw_fundamental_lines(
         main_draw,
         top_points,
@@ -399,54 +474,192 @@ def create_star_diagram(
         h,
         line_width,
     )
-    _draw_secondary_lines(second_draw, top_points, bottom_points, w, h, line_width)
+    _draw_secondary_lines(
+        second_draw,
+        top_points,
+        bottom_points,
+        inner_top_points,
+        inner_bottom_points,
+        w,
+        h,
+        beam_line_width,
+    )
 
     """
     Step 4) Draws dots.
     """
     TR, TL, BL, BR = (w, 0), (0, 0), (0, h), (w, h)
-    _draw_circle(main_draw, center=TR, radius=100, fill_color=_TR_COLOR)
-    _draw_circle(main_draw, center=TL, radius=100, fill_color=_TL_COLOR)
-    _draw_circle(main_draw, center=BL, radius=100, fill_color=_BL_COLOR)
-    _draw_circle(main_draw, center=BR, radius=100, fill_color=_BR_COLOR)
+    r = CORNER_DOT_RADIUS_IN * DPI
+    _draw_circle(main_draw, center=TR, radius=r, fill_color=_TR_COLOR)
+    _draw_circle(main_draw, center=TL, radius=r, fill_color=_TL_COLOR)
+    _draw_circle(main_draw, center=BL, radius=r, fill_color=_BL_COLOR)
+    _draw_circle(main_draw, center=BR, radius=r, fill_color=_BR_COLOR)
 
+    def angle_to_point(angle):
+        """converts polar angle to Cartesian coordinates."""
+        return np.cos(angle), np.sin(angle)
 
-    FADE_FACTOR = 0.65
+    def point_to_angle(p):
+        """converts Cartesian coordinates to polar angle."""
+        return np.arctan2(p[1], p[0])
 
     def draw_fold_diagram(point, start, end, color):
-        RADIUS = 30
-        point, edge_a, edge_b = reflect_point(point, start, end, w, h) # TR, t[0], t[1]
-        angle_a = np.arctan2(edge_a[1] - point[1], edge_a[0] - point[0])
-        angle_b = np.arctan2(edge_b[1] - point[1], edge_b[0] - point[0])
+        RADIUS = FOLD_DOT_RADIUS_IN * DPI
 
-        angle_a = _regularize_radians(angle_a)
-        angle_b = _regularize_radians(angle_b)
+        if point[0] < w / 2:
+            if point[1] < h / 2: # top-left corner is being pulled.
+                start_angle = 0
+                end_angle = np.pi/2
+            else: # bottom-left corner is being pulled.
+                start_angle = 3*np.pi / 2
+                end_angle = 0
+        else:
+            if point[1] < h / 2: # top-right corner is being pulled.
+                start_angle = np.pi/2
+                end_angle = np.pi
+            else: # bottom-right corner is being pulled.
+                start_angle = np.pi
+                end_angle = 3*np.pi / 2
 
+        point = reflect_point(point, start, end, w, h) # TR, t[0], t[1]
         _draw_circle(first_hints_draw, center=point, radius=RADIUS, fill_color=color)
-        
+
+        line_angle = np.arctan2(end[1] - start[1], end[0] - start[0]) # the line to mirror across.
+
+        angle_a = _regularize_radians(2*line_angle - start_angle)
+        angle_b = _regularize_radians(2*line_angle - end_angle)
+
+        edge_a = find_edge_intersection(point, angle_a, w, h)
+        edge_b = find_edge_intersection(point, angle_b, w, h)
+
+
         dist_a = np.sqrt((edge_a[0] - point[0])**2 + (edge_a[1] - point[1])**2)
         dist_b = np.sqrt((edge_b[0] - point[0])**2 + (edge_b[1] - point[1])**2)
 
-        ratio = dist_a / (dist_a + dist_b)
+        edge_dist = np.sqrt((edge_b[0] - edge_a[0])**2 + (edge_b[1] - edge_a[1])**2)
 
-        help_a = (
-            point[0] + np.cos(angle_a) * help_length * ratio,
-            point[1] + np.sin(angle_a) * help_length * ratio,
-        )
-        help_b = (
-            point[0] + np.cos(angle_b) * help_length * (1 - ratio),
-            point[1] + np.sin(angle_b) * help_length * (1 - ratio),
-        )
-        first_hints_draw.line(
-            (point[0], point[1], help_a[0], help_a[1]),
-            fill=interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR),
-            width=help_line_width,
-        )
-        first_hints_draw.line(
-            (point[0], point[1], help_b[0], help_b[1]),
-            fill=interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR),
-            width=help_line_width,
-        )
+        def on_paper(p):
+            return 0 <= p[0] < w and 0 <= p[1] < h
+
+        def find_entering_intersection(p, angle):
+            if on_paper(p):
+                return None
+
+            intersections = []
+
+            angle = _regularize_radians(angle)
+            going_right = angle > 3 * np.pi/2 or angle < np.pi/2
+            going_down = 0 < angle < np.pi
+
+            
+            AXIS_PRECISION = np.pi / 180
+    
+            if p[0] < 0 and angle - AXIS_PRECISION < 0 < angle + AXIS_PRECISION:
+                intersections.append((0, p[1]))
+            if p[0] >= w and angle - np.pi < 0 < angle + AXIS_PRECISION:
+                intersections.append((w - 1, p[1]))
+            elif p[1] < 0 and angle - AXIS_PRECISION < np.pi/2 < angle + AXIS_PRECISION:
+                intersections.append((p[0], 0))
+            elif angle - AXIS_PRECISION < 3*np.pi/2 < angle + AXIS_PRECISION:
+                intersections.append((p[0], h - 1))
+            else:
+                slope = np.tan(angle)
+
+                limit_x = None
+                if going_right and p[0] < 0:
+                    limit_x = 0
+                elif not going_right and p[0] >= w:
+                    limit_x = h
+
+                limit_y = None
+                if going_down and p[1] < 0:
+                    limit_y = 0
+                elif not going_down and p[1] >= h:
+                    limit_y = h
+
+                if limit_x is not None:
+                    y = slope * (limit_x - p[0]) + p[1]
+                    if 0 <= y < h:
+                        intersections.append((limit_x, y))
+
+                if limit_y is not None:
+                    x = (limit_y - p[1]) / slope + p[0]
+                    if 0 <= x < w:
+                        intersections.append((x, limit_y))
+
+            if len(intersections) > 0:
+                return min(intersections, key=lambda i: np.sqrt((i[0] - p[0])**2 + (i[1] - p[1])**2))
+            
+            return None
+
+
+        if not on_paper(point):
+            ratio_a = (edge_dist/min(w,h)) * (dist_a / edge_dist)
+            ratio_b = (edge_dist/min(w,h)) * (dist_b / edge_dist)
+
+            returning_a = find_entering_intersection(point, angle_a)
+            returning_b = find_entering_intersection(point, angle_b)
+
+            fill = interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR)
+            if returning_a is not None:
+                help_a = (
+                    returning_a[0] + np.cos(angle_a) * help_length * ratio_a,
+                    returning_a[1] + np.sin(angle_a) * help_length * ratio_a,
+                )
+                _draw_circle(second_draw, center=help_a, radius=20, fill_color=fill)
+           
+                second_draw.line(
+                    (point[0], point[1], help_a[0], help_a[1]),
+                    fill=fill,
+                    width=help_line_width,
+                )
+
+
+            if returning_b is not None:
+                help_b = (
+                    returning_b[0] + np.cos(angle_b) * help_length * ratio_b,
+                    returning_b[1] + np.sin(angle_b) * help_length * ratio_b,
+                )
+
+
+                _draw_circle(second_draw, center=help_b, radius=20, fill_color=fill)
+
+                second_draw.line(
+                    (point[0], point[1], help_b[0], help_b[1]),
+                    fill=fill,
+                    width=help_line_width,
+                )
+
+
+            #_draw_circle(first_hints_draw, center=point, radius=500, fill_color=color)
+            
+            #_draw_circle(first_hints_draw, center=help_b, radius=100, fill_color=color)
+
+
+        else:
+            ratio_a = dist_a / (dist_a + dist_b)
+            ratio_b = 1 - ratio_a
+
+            help_a = (
+                point[0] + np.cos(angle_a) * help_length * ratio_a,
+                point[1] + np.sin(angle_a) * help_length * ratio_a,
+            )
+
+            help_b = (
+                point[0] + np.cos(angle_b) * help_length * ratio_b,
+                point[1] + np.sin(angle_b) * help_length * ratio_b,
+            )
+
+            first_hints_draw.line(
+                (point[0], point[1], help_a[0], help_a[1]),
+                fill=interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR),
+                width=help_line_width,
+            )
+            first_hints_draw.line(
+                (point[0], point[1], help_b[0], help_b[1]),
+                fill=interpolate_color(color, (255, 255, 255), factor=FADE_FACTOR),
+                width=help_line_width,
+            )
 
 
     draw_fold_diagram(TR, t[0], t[1], _TR_COLOR)
@@ -464,33 +677,12 @@ def create_star_diagram(
     draw_fold_diagram(BL, b[1], b[3], _BL_COLOR)
     draw_fold_diagram(BR, b[2], b[4], _BR_COLOR)
 
-    start_color = interpolate_color(_TL_COLOR, (255, 255, 255), factor=FADE_FACTOR)
-    end_color = interpolate_color(_TR_COLOR, (255, 255, 255), factor=FADE_FACTOR)
-    midway = interpolate_color(start_color, end_color)
-    start = (0, t[4][1] * 2)
-    end = (help_length/2, start[1])
-    _draw_gradient_line(first_hints_draw, start, end, start_color, midway, help_line_width)
-
-    start = (w - help_length/2, t[1][1] * 2)
-    end = (w, start[1])
-    _draw_gradient_line(first_hints_draw, start, end, midway, end_color, help_line_width)
-
-    start_color = interpolate_color(_BL_COLOR, (255, 255, 255), factor=FADE_FACTOR)
-    end_color = interpolate_color(_BR_COLOR, (255, 255, 255), factor=FADE_FACTOR)
-    midway = interpolate_color(start_color, end_color)
-    start = (0, h - t[4][1]*2)
-    end = (help_length/2, start[1])
-    _draw_gradient_line(first_hints_draw, start, end, start_color, midway, help_line_width)
-
-    start = (w - help_length/2, h - t[1][1]*2)
-    end = (w, start[1])
-    _draw_gradient_line(first_hints_draw, start, end, midway, end_color, help_line_width)
+    
 
     """
     Step 5) Pastes the transparent onto a solid white background 
             and finally saves it.
     """
-    # 
     white_background = Image.new("RGBA", main_lines.size, (255, 255, 255, 255))
     image = Image.alpha_composite(main_lines, first_hints)
     image = Image.alpha_composite(second_lines, image)
@@ -553,44 +745,110 @@ def _png_to_pdf(images: list, pdf_path, page_size, landscape: bool=False):
         os.remove(path)
 
 
+def save_star_diagram(
+    page_size,
+    poly_height=7.65,
+    two_page: bool=False,
+    landscape: bool=False,
+    two_page_margin=0,
+    is_metric: bool=False,
+    print_margin_left=0,
+    print_margin_right=0,
+    print_margin_top=0,
+    print_margin_bottom=0,
+):
+    if landscape:
+        page_w, page_h = np.max(page_size), np.min(page_size)
+    else:
+        page_w, page_h = np.min(page_size), np.max(page_size)
+   
+    # reportlab uses 72 DPI, so that is converted to use this script's DPI.
+    margin_in = two_page_margin / 2.54 if is_metric else two_page_margin
+    image_w_in = page_w / 72
+    image_h_in = 2*(page_h/72 - margin_in) if two_page else page_h / 72
+    image_w_cm, image_h_cm = image_w_in * 2.54, image_h_in * 2.54
+
+    star_diagram = create_star_diagram(
+        print_width=image_w_cm if is_metric else image_w_in,
+        print_height=image_h_cm if is_metric else image_h_in,
+        poly_height=poly_height,
+        print_margin_left=print_margin_left,
+        print_margin_right=print_margin_right,
+        print_margin_top=print_margin_top,
+        print_margin_bottom=print_margin_bottom,
+        is_metric=is_metric,
+    )
+
+    star_diagram.save("star.png")
+
+    
+    images = []
+    if two_page:
+        # first half.
+        crop = star_diagram.crop((0, 0, page_w/72 * DPI, page_h/72 * DPI))
+        
+        # creates a new blank image with a white background.
+        new_image = Image.new("RGB", (round(page_w/72 * DPI), round(page_h/72 * DPI)), (255, 255, 255))
+        new_image.paste(crop, (0, 0))
+        images.append(new_image)
+
+        # second half.
+        crop = star_diagram.crop((0, (page_h/72 - margin_in) * DPI, image_w_in * DPI, image_h_in * DPI))
+
+        beam_line_width = max(1, round(BEAM_LINE_WIDTH_IN * DPI))
+        new_draw = ImageDraw.Draw(crop)
+        width, height = crop.size
+        new_draw.line(
+            (0, height - beam_line_width/2, width, height - beam_line_width/2),
+            fill=_BEAM_LINE_COLOR,
+            width=beam_line_width,
+        )
+        
+        # creates a new blank image with a white background.
+        new_image = Image.new("RGB", (round(page_w/72 * DPI), round(page_h/72 * DPI)), (255, 255, 255))
+        new_image.paste(crop, (0, 0))
+
+        
+
+        images.append(new_image)
+    else:
+        images.append(star_diagram)
+
+    for i, image in enumerate(images):
+        image.save(f"test-{i}.png")
+
+    _png_to_pdf(images, "star.pdf", page_size, landscape=landscape)
+
 
 def main():
     page_size = reportlab.lib.pagesizes.letter
 
-    margin = 1/2
+    """save_star_diagram(
+        page_size,
+        poly_height=5.2,
+        two_page=False,
+        landscape=False,
+        two_page_margin=1/2,
+        is_metric=False,
+        print_margin_left=0,
+        print_margin_right=0,
+        print_margin_top=0,
+        print_margin_bottom=0,
+    )"""
 
-    star_diagram = create_star_diagram(
-        print_width=11,
-        print_height=8.5*2 - margin*2,
-        poly_height=7.9,
+    save_star_diagram(
+        page_size,
+        poly_height=4.3,
+        two_page=False,
+        landscape=True,
+        two_page_margin=3/4,
+        is_metric=False,
         print_margin_left=0,
         print_margin_right=0,
         print_margin_top=0,
         print_margin_bottom=0,
     )
-
-    star_diagram.save("stars.png")
-
-    images = []
-
-    # first half.
-    crop = star_diagram.crop((0, 0, 11 * DPI, (8.5 - margin) * DPI))
     
-    # creates a new blank image with a white background.
-    new_image = Image.new("RGB", (round(11 * DPI), round(8.5 * DPI)), (255, 255, 255))
-    new_image.paste(crop, (0, 0))
-    images.append(new_image)
-
-    # second half.
-    crop = star_diagram.crop((0, (8.5 - margin) * DPI, 11 * DPI, (8.5 - margin) * 2 * DPI))
-
-    # creates a new blank image with a white background.
-    new_image = Image.new("RGB", (round(11 * DPI), round(8.5 * DPI)), (255, 255, 255))
-    new_image.paste(crop, (0, round(margin * DPI)))
-    images.append(new_image)
-
-
-    _png_to_pdf(images, "star.pdf", page_size, landscape=True) 
 
 
 if __name__ == "__main__":
