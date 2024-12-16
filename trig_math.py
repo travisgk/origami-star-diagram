@@ -69,6 +69,13 @@ def point_dist(a, b):
     return np.sqrt((b[0] - a[0])**2 + (b[1] - a[1])**2)
 
 
+def angle_is_vertical(radians):
+    return (
+        np.pi/2 - AXIS_PRECISION < radians < np.pi/2 + AXIS_PRECISION
+        or 3*np.pi/2 - AXIS_PRECISION < radians < 3*np.pi/2 + AXIS_PRECISION
+    )
+
+
 def select_points_on_line(
     points_list: list,
     start_point,
@@ -353,3 +360,7 @@ def closest_point_index(points, main_point, indices=None):
             closest_index = i
 
     return closest_index if indices is None else indices[closest_index]
+
+
+def interpolate_rgb(color_a, color_b, factor=0.5):
+    return tuple([round(a + factor*(b - a)) for a, b in zip(color_a, color_b)])
