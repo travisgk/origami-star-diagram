@@ -15,7 +15,7 @@ BL_COLOR = (100, 200, 60)
 BR_COLOR = (200, 170, 30)
 CORNER_DOT_RADIUS_IN = 1/2
 FOLD_DOT_RADIUS_IN = 1/8
-MAIN_LINE_WIDTH_IN = 3/64
+MAIN_LINE_WIDTH_IN = 1/32
 HINT_LINE_WIDTH_IN = 1/32
 BEAM_LINE_WIDTH_IN = 1/32
 
@@ -119,6 +119,7 @@ def create_star_diagram(
         width=line_width,
     )
 
+    """
     for p in top_points:
         draw_circle(main_draw, center=p, fill=TR_COLOR, radius=20)
 
@@ -130,6 +131,7 @@ def create_star_diagram(
 
     for p in inner_bottom_points:
         draw_circle(main_draw, center=p, fill=TL_COLOR, radius=12)
+    """
 
     t, b = top_points, bottom_points
     it, ib = inner_top_points, inner_bottom_points
@@ -182,6 +184,45 @@ def create_star_diagram(
             if num_pauses == 0 and len(self.lines) > 1:
                 self.lines = [(self.lines[0][0], self.lines[-1][-1])]
 
+            CORNERS = {
+                "tl": (0, 0),
+                "tr": (w, 0),
+                "br": (w, h),
+                "bl": (0, h),
+            }
+            reflects = {}
+            reflect_dist = {} # distances from center.
+            center = (w/2, h/2)
+            best_corner = None
+            min_dist = w + h
+            for name, corner in CORNERS.items():
+                reflects[name] = reflect_across_line(corner, self.edges[0], self.edges[1], w, h)
+                reflect_dist[name] = point_dist(reflects[name], center)
+                if reflect_dist[name] < min_dist:
+                    min_dist = reflect_dist[name]
+                    best_corner = name
+
+            def dists_are_similar(c1: str, c2: str):
+                return abs(reflect_dist[c2] - reflect_dist[c1]) < 1
+
+            
+            if best_corner in ["tl", "tr"] and dists_are_similar("tl", "tr"):
+                self.corner = "t"
+                self.marks = [reflects["tl"], reflects["tr"]]
+            elif best_corner in ["tr", "br"] and dists_are_similar("tr", "br"):
+                self.corner = "r"
+                self.marks = [reflects["tr"], reflects["br"]]
+            elif best_corner in ["bl", "br"] and dists_are_similar("bl", "br"):
+                self.corner = "b"
+                self.marks = [reflects["bl"], reflects["br"]]
+            elif best_corner in ["tl", "bl"] and dists_are_similar("tl", "bl"):
+                self.corner = "l"
+                self.marks = [reflects["tl"], reflects["bl"]]
+            else:
+                self.corner = best_corner
+                self.marks = [reflects[best_corner]]
+
+
             #print(self.lines)
             #print(f"{np.degrees(self.radians):.1f}°")
 
@@ -211,7 +252,7 @@ def create_star_diagram(
             len(b_on_line) > 0 and len(ib_on_line) == 0 
             and t[next_i] != b[b_on_line[-1][0]]
         ):
-            closest_i = closest_point_index([t[i], t[next_i]], b[b_on_line[0][0]], indices=[i, next_i])
+            closest_i = i if last_radians < np.pi else next_i
             series = [t[closest_i], Fold.PAUSE, b[b_on_line[-1][0]], Fold.CONTINUE]
             #print(f"homo:\t-->  t[{closest_i}]     b[{b_on_line[-1][0]}] -> ")
         elif len(b_on_line) == 0 and len(ib_on_line) > 0:
@@ -245,7 +286,7 @@ def create_star_diagram(
             len(t_on_line) > 0 and len(it_on_line) == 0 
             and b[next_i] != t[t_on_line[-1][0]]
         ):
-            closest_i = closest_point_index([b[i], b[next_i]], t[t_on_line[0][0]], indices=[i, next_i])
+            closest_i = i if last_radians > np.pi else next_i
             series = [b[closest_i], Fold.PAUSE, t[t_on_line[-1][0]], Fold.CONTINUE]
         elif len(t_on_line) == 0 and len(it_on_line) > 0:
             series = [it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
@@ -317,8 +358,9 @@ def create_star_diagram(
             else:
                 series = [ib[next_i], Fold.PAUSE, ib[i], Fold.CONTINUE, it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
         elif len(t_on_line) > 0 and len(it_on_line) == 0:
-            closest_i = closest_point_index([ib[i], ib[next_i]], t[t_on_line[-1][0]], indices=[i, next_i])
-            far_i = i if closest_i == next_i else next_i
+            
+            closest_i = i if last_radians < np.pi else next_i
+            far_i = i if last_radians >= np.pi else next_i
             series = [ib[far_i], Fold.PAUSE, ib[closest_i], Fold.CONTINUE, Fold.LIMIT, Fold.PAUSE, t[t_on_line[-1][0]], Fold.CONTINUE]
         elif len(t_on_line) == 0 and len(it_on_line) > 0:
             if len(it_on_line) == 1:
@@ -333,14 +375,29 @@ def create_star_diagram(
 
         folds.append(Fold(series))
 
+
+    # draws all the folds.
+    LINE_COLORS = {
+        "tl": TL_COLOR, "tr": TR_COLOR, "br": BR_COLOR, "bl": BL_COLOR,
+        "t": HORIZ_LINE_COLOR, "b": HORIZ_LINE_COLOR, "l": HORIZ_LINE_COLOR, "r": HORIZ_LINE_COLOR
+    }
     for fold in folds:
+        fill = LINE_COLORS[fold.corner]
         for a, b in fold.lines:
-            # draws the main horizontal line.
             main_draw.line(
                 (a[0], a[1], b[0], b[1]),
-                fill=MAIN_LINE_COLOR,
+                fill=fill,
                 width=line_width,
             )
+
+        if fold.corner in ["tl", "tr", "br", "bl"]:
+            draw_circle(hints_draw, center=fold.marks[0], fill=fill, radius=20)
+
+    corner_radius = 100
+    draw_circle(hints_draw, center=(0, 0), fill=TL_COLOR, radius=corner_radius)
+    draw_circle(hints_draw, center=(w, 0), fill=TR_COLOR, radius=corner_radius)
+    draw_circle(hints_draw, center=(w, h), fill=BR_COLOR, radius=corner_radius)
+    draw_circle(hints_draw, center=(0, h), fill=BL_COLOR, radius=corner_radius)
 
     """
     Step X) Pastes the transparent onto a solid white background 
@@ -488,11 +545,9 @@ def save_star_diagram(
 def main():
     page_size = reportlab.lib.pagesizes.letter
 
-    i = 9
-
     save_star_diagram(
         page_size,
-        poly_height=4.6,
+        poly_height=4.7,
         two_page=False,
         landscape=False,
         two_page_margin=3/4,
@@ -501,7 +556,7 @@ def main():
         print_margin_right=0,
         print_margin_top=0,
         print_margin_bottom=0,
-        num_sides=i,
+        num_sides=6,
     )
 
 
