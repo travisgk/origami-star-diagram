@@ -142,9 +142,12 @@ def create_star_diagram(
             points = [s for s in series if s not in [Fold.PAUSE, Fold.CONTINUE, Fold.LIMIT]]
             x1, y1 = points[0]
             x2, y2 = points[1]
+            
+            is_top = points[0][1] < h//2
+
             self.radians = regularize_radians(np.arctan2(y2 - y1, x2 - x1))
 
-            print(series)
+            #print(series)
 
             self.edges = find_intersections(points[0], self.radians, right=w, bottom=h, both_ways=True)
 
@@ -158,7 +161,7 @@ def create_star_diagram(
             
             for i in range(len(self.series)):
                 if self.series[i] == Fold.LIMIT:
-                    self.series[i] = find_intersections(points[0], self.radians, right=w, bottom=h//2, both_ways=False)[0]
+                    self.series[i] = find_intersections(points[0], self.radians, top=0 if is_top else h//2, right=w, bottom=h//2 if is_top else h, both_ways=False)[0]
 
             self.series = [s for s in self.series if s != Fold.CONTINUE]
 
@@ -179,8 +182,8 @@ def create_star_diagram(
             if num_pauses == 0 and len(self.lines) > 1:
                 self.lines = [(self.lines[0][0], self.lines[-1][-1])]
 
-            print(self.lines)
-            print(f"{np.degrees(self.radians):.1f}°")
+            #print(self.lines)
+            #print(f"{np.degrees(self.radians):.1f}°")
 
     folds = []
     for i in range(num_sides):
@@ -203,25 +206,57 @@ def create_star_diagram(
 
         if len(b_on_line) > 1 and len(ib_on_line) > 1:
             series = [ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]], Fold.CONTINUE]
-            print(f"homo:\t--> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
+            #print(f"homo:\t--> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
         elif (
             len(b_on_line) > 0 and len(ib_on_line) == 0 
             and t[next_i] != b[b_on_line[-1][0]]
         ):
             closest_i = closest_point_index([t[i], t[next_i]], b[b_on_line[0][0]], indices=[i, next_i])
             series = [t[closest_i], Fold.PAUSE, b[b_on_line[-1][0]], Fold.CONTINUE]
-            print(f"homo:\t-->  t[{closest_i}]     b[{b_on_line[-1][0]}] -> ")
+            #print(f"homo:\t-->  t[{closest_i}]     b[{b_on_line[-1][0]}] -> ")
         elif len(b_on_line) == 0 and len(ib_on_line) > 0:
             series = [ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]], Fold.CONTINUE]
-            print(f"homo:\t--> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
+            #print(f"homo:\t--> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
         else:
             if last_radians < np.pi:
                 series = [t[i], Fold.CONTINUE, t[next_i], Fold.CONTINUE, Fold.LIMIT]
             else:
                 series = [t[next_i], Fold.CONTINUE, t[i], Fold.CONTINUE, Fold.LIMIT]
-            print(f"homo:\t-->  t[{i}] ->  t[{next_i}] ->  (limit)")
+            #print(f"homo:\t-->  t[{i}] ->  t[{next_i}] ->  (limit)")
 
         folds.append(Fold(series))
+
+    
+        x1, y1 = b[i]
+        x2, y2 = b[next_i]
+        last_radians = regularize_radians(np.arctan2(y2-y1, x2-x1))
+
+        t_on_line = select_points_on_line(
+            points_list=t, start_point=b[next_i], radians=last_radians
+        )
+        it_on_line = select_points_on_line(
+            points_list=it, start_point=b[next_i], radians=last_radians
+        )
+
+        series = None
+        if len(t_on_line) > 1 and len(it_on_line) > 1:
+            series = [it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
+        elif (
+            len(t_on_line) > 0 and len(it_on_line) == 0 
+            and b[next_i] != t[t_on_line[-1][0]]
+        ):
+            closest_i = closest_point_index([b[i], b[next_i]], t[t_on_line[0][0]], indices=[i, next_i])
+            series = [b[closest_i], Fold.PAUSE, t[t_on_line[-1][0]], Fold.CONTINUE]
+        elif len(t_on_line) == 0 and len(it_on_line) > 0:
+            series = [it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
+        else:
+            if last_radians > np.pi:
+                series = [b[i], Fold.CONTINUE, b[next_i], Fold.CONTINUE, Fold.LIMIT]
+            else:
+                series = [b[next_i], Fold.CONTINUE, b[i], Fold.CONTINUE, Fold.LIMIT]
+
+        if series is not None:
+            folds.append(Fold(series))
 
         """
         Step 5) Looks for hetero lines.
@@ -237,33 +272,66 @@ def create_star_diagram(
             points_list=ib, start_point=it[next_i], radians=last_radians
         )
 
-
         if len(b_on_line) > 0 and len(ib_on_line) > 0:
-            series = [it[i], Fold.PAUSE, it[next_i], Fold.CONTINUE, ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]], Fold.CONTINUE]
-            print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
+            if last_radians < np.pi:
+                series = [it[i], Fold.PAUSE, it[next_i], Fold.CONTINUE, ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]], Fold.CONTINUE]
+            else:
+                series = [it[next_i], Fold.PAUSE, it[i], Fold.CONTINUE, ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]], Fold.CONTINUE]
+            #print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
         elif len(b_on_line) > 0 and len(ib_on_line) == 0:
             closest_i = closest_point_index([it[i], it[next_i]], b[b_on_line[-1][0]], indices=[i, next_i])
             far_i = i if closest_i == next_i else next_i
             series = [it[far_i], Fold.PAUSE, it[closest_i], Fold.CONTINUE, Fold.LIMIT, Fold.PAUSE, b[b_on_line[-1][0]], Fold.CONTINUE]
-            print(f"hetero:\t--> it[{far_i}]    it[{closest_i}] ->  (limit)   b[{b_on_line[-1][0]}] -> ")
+            #print(f"hetero:\t--> it[{far_i}]    it[{closest_i}] ->  (limit)   b[{b_on_line[-1][0]}] -> ")
         elif len(b_on_line) == 0 and len(ib_on_line) > 0:
             if len(ib_on_line) == 1:
 
                 series = [it[i], Fold.PAUSE, it[next_i], Fold.CONTINUE, ib[ib_on_line[0][0]]]
-                print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]")
+                #print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]")
             else:
                 series = [it[i], Fold.PAUSE, it[next_i], Fold.CONTINUE, ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]]]
-                print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}]")
+                #print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}]")
         else:
             if last_radians < np.pi:
                 series = [it[i], Fold.PAUSE, it[next_i], Fold.CONTINUE, Fold.LIMIT]
             else:
                 series = [it[next_i], Fold.PAUSE, it[i], Fold.CONTINUE, Fold.LIMIT]
-            print(f"hetero:\t--> it[{i}]    it[{next_i}] ->  (limit)")
+            #print(f"hetero:\t--> it[{i}]    it[{next_i}] ->  (limit)")
 
         folds.append(Fold(series))
 
+        x1, y1 = ib[i]
+        x2, y2 = ib[next_i]
+        last_radians = regularize_radians(np.arctan2(y2-y1, x2-x1))
 
+        t_on_line = select_points_on_line(
+            points_list=t, start_point=ib[next_i], radians=last_radians,
+        )
+        it_on_line = select_points_on_line(
+            points_list=it, start_point=ib[next_i], radians=last_radians
+        )
+
+        if len(t_on_line) > 0 and len(it_on_line) > 0:
+            if last_radians > np.pi:
+                series = [ib[i], Fold.PAUSE, ib[next_i], Fold.CONTINUE, it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
+            else:
+                series = [ib[next_i], Fold.PAUSE, ib[i], Fold.CONTINUE, it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
+        elif len(t_on_line) > 0 and len(it_on_line) == 0:
+            closest_i = closest_point_index([ib[i], ib[next_i]], t[t_on_line[-1][0]], indices=[i, next_i])
+            far_i = i if closest_i == next_i else next_i
+            series = [ib[far_i], Fold.PAUSE, ib[closest_i], Fold.CONTINUE, Fold.LIMIT, Fold.PAUSE, t[t_on_line[-1][0]], Fold.CONTINUE]
+        elif len(t_on_line) == 0 and len(it_on_line) > 0:
+            if len(it_on_line) == 1:
+                series = [ib[i], Fold.PAUSE, ib[next_i], Fold.CONTINUE, it[it_on_line[0][0]]]
+            else:
+                series = [ib[i], Fold.PAUSE, ib[next_i], Fold.CONTINUE, it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]]]
+        else:
+            if last_radians > np.pi:
+                series = [ib[i], Fold.PAUSE, ib[next_i], Fold.CONTINUE, Fold.LIMIT]
+            else:
+                series = [ib[next_i], Fold.PAUSE, ib[i], Fold.CONTINUE, Fold.LIMIT]
+
+        folds.append(Fold(series))
 
     for fold in folds:
         for a, b in fold.lines:
@@ -420,7 +488,7 @@ def save_star_diagram(
 def main():
     page_size = reportlab.lib.pagesizes.letter
 
-    i = 7
+    i = 9
 
     save_star_diagram(
         page_size,
