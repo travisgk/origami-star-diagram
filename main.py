@@ -145,8 +145,7 @@ def create_star_diagram(
             x1, y1 = points[0]
             x2, y2 = points[1]
             
-            is_top = points[0][1] < h//2
-
+            
             self.radians = regularize_radians(np.arctan2(y2 - y1, x2 - x1))
 
             #print(series)
@@ -161,6 +160,8 @@ def create_star_diagram(
             if self.series[-1] == Fold.CONTINUE:
                 self.series[-1] = find_intersections(points[0], self.radians, right=w, bottom=h, both_ways=False)[0]
             
+            is_top = points[0][1] < h//2
+
             for i in range(len(self.series)):
                 if self.series[i] == Fold.LIMIT:
                     self.series[i] = find_intersections(points[0], self.radians, top=0 if is_top else h//2, right=w, bottom=h//2 if is_top else h, both_ways=False)[0]
@@ -252,7 +253,7 @@ def create_star_diagram(
             len(b_on_line) > 0 and len(ib_on_line) == 0 
             and t[next_i] != b[b_on_line[-1][0]]
         ):
-            closest_i = i if last_radians < np.pi else next_i
+            closest_i = i if t[i][1] > t[next_i][1] else next_i 
             series = [t[closest_i], Fold.PAUSE, b[b_on_line[-1][0]], Fold.CONTINUE]
             #print(f"homo:\t-->  t[{closest_i}]     b[{b_on_line[-1][0]}] -> ")
         elif len(b_on_line) == 0 and len(ib_on_line) > 0:
@@ -286,12 +287,12 @@ def create_star_diagram(
             len(t_on_line) > 0 and len(it_on_line) == 0 
             and b[next_i] != t[t_on_line[-1][0]]
         ):
-            closest_i = i if last_radians > np.pi else next_i
+            closest_i = i if b[i][1] < b[next_i][1] else next_i 
             series = [b[closest_i], Fold.PAUSE, t[t_on_line[-1][0]], Fold.CONTINUE]
         elif len(t_on_line) == 0 and len(it_on_line) > 0:
             series = [it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
         else:
-            if last_radians > np.pi:
+            if last_radians >= np.pi:
                 series = [b[i], Fold.CONTINUE, b[next_i], Fold.CONTINUE, Fold.LIMIT]
             else:
                 series = [b[next_i], Fold.CONTINUE, b[i], Fold.CONTINUE, Fold.LIMIT]
@@ -320,8 +321,9 @@ def create_star_diagram(
                 series = [it[next_i], Fold.PAUSE, it[i], Fold.CONTINUE, ib[ib_on_line[0][0]], Fold.PAUSE, ib[ib_on_line[-1][0]], Fold.CONTINUE]
             #print(f"hetero:\t--> it[{i}]    it[{next_i}] -> ib[{ib_on_line[0][0]}]    ib[{ib_on_line[-1][0]}] -> ")
         elif len(b_on_line) > 0 and len(ib_on_line) == 0:
-            closest_i = closest_point_index([it[i], it[next_i]], b[b_on_line[-1][0]], indices=[i, next_i])
+            closest_i = closest_point_index([it[i], it[next_i]], b[b_on_line[0][0]], indices=[i, next_i])
             far_i = i if closest_i == next_i else next_i
+
             series = [it[far_i], Fold.PAUSE, it[closest_i], Fold.CONTINUE, Fold.LIMIT, Fold.PAUSE, b[b_on_line[-1][0]], Fold.CONTINUE]
             #print(f"hetero:\t--> it[{far_i}]    it[{closest_i}] ->  (limit)   b[{b_on_line[-1][0]}] -> ")
         elif len(b_on_line) == 0 and len(ib_on_line) > 0:
@@ -358,9 +360,8 @@ def create_star_diagram(
             else:
                 series = [ib[next_i], Fold.PAUSE, ib[i], Fold.CONTINUE, it[it_on_line[0][0]], Fold.PAUSE, it[it_on_line[-1][0]], Fold.CONTINUE]
         elif len(t_on_line) > 0 and len(it_on_line) == 0:
-            
-            closest_i = i if last_radians < np.pi else next_i
-            far_i = i if last_radians >= np.pi else next_i
+            closest_i = closest_point_index([ib[i], ib[next_i]], t[t_on_line[0][0]], indices=[i, next_i])
+            far_i = i if closest_i == next_i else next_i
             series = [ib[far_i], Fold.PAUSE, ib[closest_i], Fold.CONTINUE, Fold.LIMIT, Fold.PAUSE, t[t_on_line[-1][0]], Fold.CONTINUE]
         elif len(t_on_line) == 0 and len(it_on_line) > 0:
             if len(it_on_line) == 1:
@@ -393,7 +394,7 @@ def create_star_diagram(
         if fold.corner in ["tl", "tr", "br", "bl"]:
             draw_circle(hints_draw, center=fold.marks[0], fill=fill, radius=20)
 
-    corner_radius = 100
+    corner_radius = 200
     draw_circle(hints_draw, center=(0, 0), fill=TL_COLOR, radius=corner_radius)
     draw_circle(hints_draw, center=(w, 0), fill=TR_COLOR, radius=corner_radius)
     draw_circle(hints_draw, center=(w, h), fill=BR_COLOR, radius=corner_radius)
@@ -556,7 +557,7 @@ def main():
         print_margin_right=0,
         print_margin_top=0,
         print_margin_bottom=0,
-        num_sides=6,
+        num_sides=9,
     )
 
 
