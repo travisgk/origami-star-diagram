@@ -29,6 +29,8 @@ pip install numpy pillow reportlab
 4) If you're using two pages, paste the two pages together so that the second page's overlap runs along the main horizontal line (the midway line).
 5) Trim off the extra paper on the second page, removing the thick bottom line with the final cut.
 
+<br>
+
 # "Okay, now how do I make this thing?"
 1) Pull a corner to a dot of that has the same color, lining up the pulled corner of the paper with the thinner, lighter guide lines coming from the point.
 2) Make the crease along where the thick line is shown (a light table can be very helpful here).
