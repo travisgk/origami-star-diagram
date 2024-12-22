@@ -1,21 +1,21 @@
+"""
+This creates a PDF for a 5-pointed star that uses one page.
+"""
+
 import reportlab.lib.pagesizes
 from star_diagram import save_star_diagram
 
+
 def main():
-    page_size = reportlab.lib.pagesizes.letter
+    page_size = reportlab.lib.pagesizes.letter  # US letter paper size.
 
     save_star_diagram(
         page_size,
-        poly_height=4.9,
+        num_sides=5,
+        poly_height=5.1,
         two_page=False,
         landscape=False,
-        two_page_margin=3/4,
         is_metric=False,
-        print_margin_left=0,
-        print_margin_right=0,
-        print_margin_top=0,
-        print_margin_bottom=0,
-        num_sides=7,
     )
 
 
