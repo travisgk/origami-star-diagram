@@ -16,6 +16,7 @@ def main():
         two_page=False,
         landscape=False,
         is_metric=False,
+        save_png_copy=True,
     )
 
 

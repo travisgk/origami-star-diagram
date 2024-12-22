@@ -56,6 +56,7 @@ def save_star_diagram(
     print_margin_bottom=0,
     is_metric: bool = False,
     out_path=None,
+    save_png_copy: bool = False,
 ):
     """
     Saves an origami diagram to file that can be used to quickly
@@ -75,6 +76,7 @@ def save_star_diagram(
         print_margin_bottom (num): the length cut off the bottom side of the output.
         is_metric (bool): if True, all given measurements are treated as cm.
         out_path (str): output path for the PDF. if None, out path will become a program default.
+        save_png_copy (bool): if True, the diagram is saved as a .png as well.
     """
 
     if landscape:
@@ -113,7 +115,11 @@ def save_star_diagram(
         is_metric=is_metric,
     )
 
-    star_diagram.save("star.png")
+    if out_path is None:
+        out_path = f"{num_sides}-star.pdf"
+
+    if save_png_copy:
+        star_diagram.save(out_path[:-4] + ".png")
 
     images = []
     if two_page:
@@ -164,8 +170,6 @@ def save_star_diagram(
             temp_paths.append(temp_file.name)
         image.save(temp_paths[-1])
 
-    if out_path is None:
-        out_path = f"{num_sides}-star.pdf"
     png_to_pdf(images, out_path, page_size, landscape=landscape)
 
     for temp_path in temp_paths:
@@ -173,5 +177,11 @@ def save_star_diagram(
 
     print(
         f"An origami template for a star with {num_sides} "
-        f"sides has been saved to {out_path}.\n"
+        f"sides has been saved to {out_path}.",
+        end="",
     )
+
+    if save_png_copy:
+        print(f"\nIt's also been saved as a PNG under {out_path[:-4]}.png.\n")
+    else:
+        print("\n")
