@@ -3,10 +3,14 @@ This little toy script generates a PDF that can be printed out and followed to c
 ![](https://github.com/travisgk/origami-star-diagram/blob/main/example-outputs/stars-1.jpg?raw=true)
 ![](https://github.com/travisgk/origami-star-diagram/blob/main/example-outputs/stars-3.jpg?raw=true)
 
+<br>
+
 # Setup
 ```
 pip install numpy pillow reportlab
 ```
+
+<br>
 
 # "How do I make a diagram?"
 1) Generate a PDF to print out.
