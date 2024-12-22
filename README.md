@@ -48,5 +48,5 @@ pip install numpy pillow reportlab
 <br>
 
 # Notes
-- Folds are often drawn so they stop and don't go over the halfway line.
+- Folds are often drawn so they stop and don't go over the halfway line. This is done to avoid overcluttering the diagram. It can often help the construction process to continue these folds beyond the halfway line and to the very end of the paper, so long as you avoid making a crease inside one of the star shapes.
 - For glueing, it seems to work best to find the side of the star that exists along the hinge (one solid side, no overlapping), and then go around, skipping every other side, and glueing those sides together. Note the video for further technique.
