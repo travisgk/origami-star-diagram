@@ -42,4 +42,11 @@ pip install numpy pillow reportlab
 3) Repeat this for all the colored points on the diagram. For very large diagrams, some of these points might be outside of the diagram itself. In this case, look for any guide lines running off the page that match the corner's color and reasonably corresponds to the fold you're trying to make.
 4) Fold the paper in half to get the main horizontal line that bisects the paper.
 5) For vertical/horizontal folds, pull and match sides up with the short gray notches to make the fold along the thick vertical/horizontal line.
-6) Assemble the star. More detailed instructions will be added later. [See this video to understand how it comes together](https://www.youtube.com/watch?v=gcgAhG46NYM).
+6) Fold the faint "beaming" lines coming from the star. These do not have any hint markers.
+7) Assemble the star. More detailed instructions will be added later. [See this video to understand how it comes together](https://www.youtube.com/watch?v=gcgAhG46NYM).
+
+<br>
+
+# Notes
+- Folds are often drawn so they stop and don't go over the halfway line.
+- For glueing, it seems to work best to find the side of the star that exists along the hinge (one solid side, no overlapping), and then go around, skipping every other side, and glueing those sides together. Note the video for further technique.
